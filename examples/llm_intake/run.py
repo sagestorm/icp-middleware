@@ -25,11 +25,53 @@ from icp_middleware.llm_intake import (  # noqa: E402
 HERE = Path(__file__).resolve().parent
 DEFAULT_EVENT = HERE / "sample_event.json"
 DEFAULT_OUT = HERE / "out"
+_NIM_BASE = "https://integrate.api.nvidia.com/v1"
+_NIM_MODEL = "google/gemma-4-31b-it"
 
 
 def _write_json(path: Path, payload: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+def _load_dotenv(path: Path) -> None:
+    """Minimal KEY=VALUE loader; does not override existing process env."""
+    if not path.is_file():
+        return
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
+def _resolve_live_credentials() -> tuple[str, str, str]:
+    """Map OpenAI or NVIDIA NIM env vars to (api_key, base_url, model)."""
+    api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("NVIDIA_API_KEY")
+    if not api_key:
+        raise SystemExit(
+            "Live mode needs OPENAI_API_KEY or NVIDIA_API_KEY "
+            "(load from repo-root .env or the process environment)."
+        )
+    if os.environ.get("OPENAI_API_KEY"):
+        base_url = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com")
+        model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+    else:
+        base_url = (
+            os.environ.get("OPENAI_BASE_URL")
+            or os.environ.get("MASTERY_MODEL_BASE_URL")
+            or _NIM_BASE
+        )
+        model = (
+            os.environ.get("OPENAI_MODEL")
+            or os.environ.get("MASTERY_MODEL_NAME")
+            or _NIM_MODEL
+        )
+    return api_key, base_url, model
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -67,17 +109,17 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    # Prefer workspace .env (pipi/), then middleware package .env — never override
+    # already-exported process variables.
+    _load_dotenv(_ROOT.parent / ".env")
+    _load_dotenv(_ROOT / ".env")
+
     use_live = bool(args.live)  # default path is mock when --live omitted
     data = json.loads(args.event.read_text(encoding="utf-8"))
     event_pack = event_pack_from_dict(data)
 
     if use_live:
-        api_key = os.environ.get("OPENAI_API_KEY")
-        if not api_key:
-            print("OPENAI_API_KEY is required for --live", file=sys.stderr)
-            return 2
-        base_url = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com")
-        model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+        api_key, base_url, model = _resolve_live_credentials()
         provider = OpenAICompatibleProvider(
             api_key=api_key,
             base_url=base_url,

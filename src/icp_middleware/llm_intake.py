@@ -152,8 +152,12 @@ class OpenAICompatibleProvider:
     timeout_s: float = 60.0
 
     def complete(self, system: str, user: str) -> str:
+        # Accept either host root or an OpenAI-style ".../v1" root (NVIDIA NIM).
         root = self.base_url.rstrip("/")
-        url = f"{root}/v1/chat/completions"
+        if root.endswith("/v1"):
+            url = f"{root}/chat/completions"
+        else:
+            url = f"{root}/v1/chat/completions"
         body = json.dumps(
             {
                 "model": self.model,

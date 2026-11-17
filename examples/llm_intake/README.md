@@ -18,9 +18,22 @@ Writes:
 - `examples/llm_intake/out/analysis_packet.json`
 - `examples/llm_intake/out/coding_key.json` (**steward-only** — do not share with blind reviewers)
 
-## Live (optional OpenAI-compatible HTTP)
+## Live (OpenAI-compatible or NVIDIA NIM)
 
 Uses stdlib `urllib` only (no `openai` / `httpx` package required).
+
+`run.py` loads `../.env` then `.env` without overriding already-exported vars.
+
+**NVIDIA NIM** (hosted catalog):
+
+```bash
+# In repo-root .env (never commit):
+# NVIDIA_API_KEY=nvapi-...
+# MASTERY_MODEL_NAME=google/gemma-4-31b-it
+python examples/llm_intake/run.py --live
+```
+
+**OpenAI / compatible**:
 
 ```bash
 set OPENAI_API_KEY=sk-...
@@ -31,12 +44,12 @@ python examples/llm_intake/run.py --live
 
 | Env | Default | Purpose |
 |-----|---------|---------|
-| `OPENAI_API_KEY` | _(required for `--live`)_ | Bearer token |
-| `OPENAI_BASE_URL` | `https://api.openai.com` | Host root (`/v1/chat/completions` appended) |
-| `OPENAI_MODEL` | `gpt-4o-mini` | Model id |
+| `OPENAI_API_KEY` or `NVIDIA_API_KEY` | _(required for `--live`)_ | Bearer token |
+| `OPENAI_BASE_URL` / `MASTERY_MODEL_BASE_URL` | OpenAI host, or NIM `https://integrate.api.nvidia.com/v1` when using `NVIDIA_API_KEY` | API root (`…/v1` or host; both accepted) |
+| `OPENAI_MODEL` / `MASTERY_MODEL_NAME` | `gpt-4o-mini` or NIM `google/gemma-4-31b-it` | Model id |
 
-Any OpenAI-compatible Chat Completions endpoint works (local gateways, Azure
-proxies with a compatible path, etc.).
+Catalog models go EOL — if you see HTTP 410, list models at
+`GET /v1/models` and set `MASTERY_MODEL_NAME` to a live chat model.
 
 ## Sample event
 
