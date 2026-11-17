@@ -49,3 +49,6 @@ Thumbs.db
 # Local tooling
 *.log
 .cache/
+
+# Example run outputs
+examples/llm_intake/out/

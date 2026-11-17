@@ -1,0 +1,43 @@
+{
+  "event_id": "evt-outage-2026-11-17",
+  "event_type": "technical_incident",
+  "respondent_type": "ai_persona",
+  "information_access": "asymmetric_role_packs",
+  "downstream": "manual_blind_review",
+  "shared_facts": [
+    "F-000: On 2026-11-17 the checkout API returned elevated 5xx rates for ~47 minutes."
+  ],
+  "personas": [
+    {
+      "persona_id": "sre-oncall",
+      "knowledge_condition_id": "K-01",
+      "role_label_steward_only": "SRE on-call (asymmetric pack)",
+      "fact_ids": ["F-001", "F-002", "F-003"],
+      "fact_sheet_lines": [
+        "payments-api pod restart loop began at 14:02 UTC after a bad config push.",
+        "First PagerDuty page fired at 14:04 UTC on the payments-api service.",
+        "Rollback of config revision 8821 completed at 14:49 UTC."
+      ]
+    },
+    {
+      "persona_id": "product-owner",
+      "knowledge_condition_id": "K-02",
+      "role_label_steward_only": "Product owner (asymmetric pack)",
+      "fact_ids": ["F-010", "F-011"],
+      "fact_sheet_lines": [
+        "Customer-facing error rate on checkout UI rose above 8% starting 14:05 UTC.",
+        "Feature flag 'checkout_v2' remained enabled during the incident window."
+      ]
+    },
+    {
+      "persona_id": "support-lead",
+      "knowledge_condition_id": "K-03",
+      "role_label_steward_only": "Support lead (asymmetric pack)",
+      "fact_ids": ["F-020", "F-021"],
+      "fact_sheet_lines": [
+        "Support queue first logged a cluster of 'login failed' tickets at 14:07 UTC.",
+        "Ticket volume peaked at 62 open incidents before the all-clear at 15:00 UTC."
+      ]
+    }
+  ]
+}

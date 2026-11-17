@@ -71,6 +71,28 @@ python -m icp_middleware export -i records.json -o packet.json
 
 See `examples/basic_pipeline.py`.
 
+## LLM intake
+
+Persona loop that gives each AI respondent one event fact pack, requests a
+single interrogative, validates with ICP error codes (retry ≤3, no coaching
+rewrites), then blind-exports accepted records.
+
+```bash
+# Offline demo (MockProvider — no API key)
+python examples/llm_intake/run.py --mock
+
+# Optional live OpenAI-compatible Chat Completions (stdlib urllib only)
+# OPENAI_API_KEY / OPENAI_BASE_URL / OPENAI_MODEL
+python examples/llm_intake/run.py --live
+```
+
+Details: [`examples/llm_intake/README.md`](examples/llm_intake/README.md).
+Library entry points: `PersonaSpec`, `EventPack`, `MockProvider`,
+`OpenAICompatibleProvider`, `collect_persona_interrogative`, `run_llm_intake`.
+
+Core package dependencies remain empty; the optional live path uses only the
+Python standard library (`urllib`).
+
 ## Protocol relationship (source of truth)
 
 Normative protocol: [sagestorm/interrogative-collection-protocol](https://github.com/sagestorm/interrogative-collection-protocol)
@@ -118,6 +140,9 @@ Aligned to ICP v1 draft lock-ins:
 - `seal_coding_key`
 - `export_and_seal`
 - `PROTOCOL_VERSION` / `PROTOCOL_VERSION_STR`
+- LLM intake: `PersonaSpec`, `EventPack`, `MockProvider`,
+  `OpenAICompatibleProvider`, `SYSTEM_PROMPT`,
+  `collect_persona_interrogative`, `run_llm_intake`, `event_pack_from_dict`
 
 ## License
 
