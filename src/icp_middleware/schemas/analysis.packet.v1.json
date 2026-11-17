@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://interrogative-collection-protocol.org/schemas/analysis.packet.v1.json",
+  "title": "ICP Blind Analysis Packet v1",
+  "description": "Blind review export packet. MUST NOT contain respondent_token, interrogative_raw, bias_quarantine, validation, or coding-key maps.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "review_packet_id",
+    "protocol_version",
+    "profile",
+    "units"
+  ],
+  "properties": {
+    "review_packet_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "protocol_version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "profile": {
+      "type": "string",
+      "const": "manual_blind_review"
+    },
+    "created_at_utc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "units": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/analysisUnit"
+      }
+    }
+  },
+  "$defs": {
+    "analysisUnit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "unit_id",
+        "protocol_version",
+        "event_id",
+        "interrogative_normalized",
+        "fact_refs",
+        "knowledge_condition_id",
+        "collection_config",
+        "submitted_on_utc"
+      ],
+      "properties": {
+        "unit_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque unit id within the packet; MUST NOT equal steward record_id in a recoverable way."
+        },
+        "protocol_version": {
+          "type": "string",
+          "const": "1.0"
+        },
+        "event_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Event id or steward-substituted event_token mapped only in the coding key."
+        },
+        "interrogative_normalized": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fact_refs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^F-[0-9]{3}$"
+          },
+          "uniqueItems": true
+        },
+        "knowledge_condition_id": {
+          "type": "string",
+          "pattern": "^K-[0-9]{2}$"
+        },
+        "collection_config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["event_type", "downstream"],
+          "properties": {
+            "event_type": {
+              "type": "string",
+              "enum": [
+                "technical_incident",
+                "policy_change",
+                "interpersonal_conflict",
+                "other"
+              ]
+            },
+            "downstream": {
+              "type": "string",
+              "enum": [
+                "manual_blind_review",
+                "python_clustering",
+                "db_ingestion"
+              ]
+            }
+          }
+        },
+        "submitted_on_utc": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+          "description": "Date-rounded UTC submission day (YYYY-MM-DD)."
+        }
+      }
+    }
+  }
+}

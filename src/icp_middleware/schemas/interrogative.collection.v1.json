@@ -1,0 +1,217 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://interrogative-collection-protocol.org/schemas/interrogative.collection.v1.json",
+  "title": "ICP Interrogative Collection Record v1",
+  "description": "Normative record shape for Interrogative Collection Protocol v1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "record_id",
+    "event_id",
+    "protocol_version",
+    "collection_config",
+    "knowledge_condition_id",
+    "respondent_token",
+    "interrogative_raw",
+    "bias_quarantine",
+    "interrogative_normalized",
+    "validation",
+    "fact_refs",
+    "submitted_at_utc"
+  ],
+  "properties": {
+    "record_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Unique opaque identifier for this collection record."
+    },
+    "event_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Shared identifier for the single event under study."
+    },
+    "protocol_version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "collection_config": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "respondent_type",
+        "event_type",
+        "information_access",
+        "downstream"
+      ],
+      "properties": {
+        "respondent_type": {
+          "type": "string",
+          "enum": ["human_web", "ai_persona", "hybrid"]
+        },
+        "event_type": {
+          "type": "string",
+          "enum": [
+            "technical_incident",
+            "policy_change",
+            "interpersonal_conflict",
+            "other"
+          ]
+        },
+        "information_access": {
+          "type": "string",
+          "enum": ["identical_fact_sheet", "asymmetric_role_packs"]
+        },
+        "downstream": {
+          "type": "string",
+          "enum": [
+            "manual_blind_review",
+            "python_clustering",
+            "db_ingestion"
+          ]
+        }
+      }
+    },
+    "knowledge_condition_id": {
+      "type": "string",
+      "pattern": "^K-[0-9]{2}$",
+      "description": "Opaque knowledge condition id (K-##)."
+    },
+    "respondent_token": {
+      "type": "string",
+      "pattern": "^R-[A-Z0-9]{12}$",
+      "description": "Opaque respondent token (R-[A-Z0-9]{12})."
+    },
+    "interrogative_raw": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Exact submitted interrogative before cleaning."
+    },
+    "bias_quarantine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["flags", "spans"],
+      "properties": {
+        "flags": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "emotion",
+              "leading",
+              "meta",
+              "compound",
+              "length",
+              "non_wh",
+              "missing_fact_ref"
+            ]
+          },
+          "uniqueItems": true
+        },
+        "spans": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["start", "end", "reason"],
+            "properties": {
+              "start": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "end": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "interrogative_normalized": {
+      "type": "string",
+      "description": "Cleaning-only normalization of interrogative_raw; MUST NOT paraphrase."
+    },
+    "validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "errors", "gates_passed"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["accepted", "rejected"]
+        },
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["code", "message"],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "E_ATOM",
+                  "E_WH",
+                  "E_EMO",
+                  "E_LEAD",
+                  "E_LEN",
+                  "E_META",
+                  "E_FACT"
+                ]
+              },
+              "message": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "gates_passed": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "E_ATOM",
+              "E_WH",
+              "E_EMO",
+              "E_LEAD",
+              "E_LEN",
+              "E_META",
+              "E_FACT"
+            ]
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "fact_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^F-[0-9]{3}$"
+      },
+      "uniqueItems": true,
+      "description": "Opaque fact references (F-###). Required non-empty under asymmetric_role_packs."
+    },
+    "submitted_at_utc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC 3339 UTC timestamp of submission."
+    },
+    "review_packet_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "respondent_channel": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}
