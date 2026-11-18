@@ -52,3 +52,4 @@ Thumbs.db
 
 # Example run outputs
 examples/llm_intake/out/
+examples/llm_intake/out_*/
