@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://interrogative-collection-protocol.org/schemas/analysis.packet.v1.json",
+  "$id": "https://sagestorm.github.io/interrogative-collection-protocol/schemas/analysis.packet.v1.json",
   "title": "ICP Blind Analysis Packet v1",
   "description": "Blind review export packet. MUST NOT contain respondent_token, interrogative_raw, bias_quarantine, validation, or coding-key maps.",
   "type": "object",

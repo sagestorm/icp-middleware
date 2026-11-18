@@ -1,8 +1,12 @@
 # LLM intake example
 
 Offline-first ICP consumer: each AI persona gets one event fact pack, emits
-exactly one interrogative, and middleware validates (retry ≤3 with error codes
-only). Accepted records go through blind export + steward coding key.
+exactly one interrogative **plus** `fact_refs`, and middleware validates
+(retry ≤3 with error codes only). Accepted records go through blind export +
+steward coding key.
+
+`E_SPEC` rejects banal generics (e.g. “What event is being described?”) and,
+when a fact sheet is supplied, requires content-token overlap with the pack.
 
 ## Mock (default — no API key)
 
@@ -33,6 +37,15 @@ Uses stdlib `urllib` only (no `openai` / `httpx` package required).
 python examples/llm_intake/run.py --live
 ```
 
+**Prove live retry** (attempt 1 = local pollution; attempt 2+ = real NIM):
+
+```bash
+python examples/llm_intake/run.py --live --probe-retry
+```
+
+Prints `probe_calls` / `network_calls` / `persona_attempts` and writes
+`out/probe_retry_summary.json`.
+
 **OpenAI / compatible**:
 
 ```bash
@@ -51,10 +64,16 @@ python examples/llm_intake/run.py --live
 Catalog models go EOL — if you see HTTP 410, list models at
 `GET /v1/models` and set `MASTERY_MODEL_NAME` to a live chat model.
 
-## Sample event
+## Sample events
 
-`sample_event.json` is a `technical_incident` outage with **asymmetric** role
-packs:
+Pass either pack with `--event`:
+
+```bash
+python examples/llm_intake/run.py --mock --event examples/llm_intake/sample_event.json
+python examples/llm_intake/run.py --mock --event examples/llm_intake/sample_event_policy.json
+```
+
+### `sample_event.json` — `technical_incident` (asymmetric)
 
 | Condition | Persona | Allowed facts |
 |-----------|---------|---------------|
@@ -62,5 +81,15 @@ packs:
 | K-02 | Product owner | F-010, F-011 |
 | K-03 | Support lead | F-020, F-021 |
 
-`respondent_type` is `ai_persona`. Validation failures are returned to the
-model as error codes only — no paraphrased coaching.
+### `sample_event_policy.json` — `policy_change` (asymmetric)
+
+| Condition | Persona | Allowed facts |
+|-----------|---------|---------------|
+| K-01 | HR policy lead | F-101…F-103 |
+| K-02 | Engineering manager | F-110, F-111 |
+| K-03 | Employee representative | F-120, F-121 |
+
+`respondent_type` is `ai_persona`. The model must emit
+`{"interrogative":"...","fact_refs":["F-###",...]}` with refs ⊆ the persona
+pack (no silent full-pack fill). Validation failures return error codes only —
+no paraphrased coaching.

@@ -21,7 +21,53 @@ def test_happy_path() -> None:
         "E_LEN",
         "E_META",
         "E_FACT",
+        "E_SPEC",
     }
+
+
+def test_e_wh_allows_prepositional_front() -> None:
+    result = validate_interrogative(
+        "At what time did the support queue first log a cluster of login failed tickets?",
+        information_access="identical_fact_sheet",
+    )
+    assert "E_WH" not in result.codes
+    assert result.passed
+
+
+def test_e_spec_rejects_banal_generic() -> None:
+    result = validate_interrogative(
+        "What event is being described?",
+        information_access="identical_fact_sheet",
+    )
+    assert "E_SPEC" in result.codes
+    assert not result.passed
+
+
+def test_e_spec_rejects_ungrounded_vs_sheet() -> None:
+    sheet = (
+        "At 14:02 UTC the payments-api pod entered a restart loop after a "
+        "bad ConfigMap roll."
+    )
+    result = validate_interrogative(
+        "Which satellite constellation lost telemetry first?",
+        information_access="identical_fact_sheet",
+        fact_sheet_text=sheet,
+    )
+    assert "E_SPEC" in result.codes
+
+
+def test_e_spec_accepts_grounded() -> None:
+    sheet = (
+        "At 14:02 UTC the payments-api pod entered a restart loop after a "
+        "bad ConfigMap roll."
+    )
+    result = validate_interrogative(
+        "What caused the payments-api pod restart loop at 14:02 UTC?",
+        information_access="identical_fact_sheet",
+        fact_sheet_text=sheet,
+    )
+    assert result.passed
+    assert "E_SPEC" not in result.codes
 
 
 def test_e_atom_multiple_questions() -> None:

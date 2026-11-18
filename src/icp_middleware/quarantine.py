@@ -118,6 +118,8 @@ def quarantine_bias(
     if "E_FACT" in codes:
         flags.append("missing_fact_ref")
 
+    # E_SPEC has no dedicated quarantine flag in ICP v1 schema (closed enum).
+
     flags = list(dict.fromkeys(flags))
 
     notes = freeform_affect

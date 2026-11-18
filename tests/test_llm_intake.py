@@ -7,12 +7,15 @@ import random
 
 from icp_middleware.llm_intake import (
     EventPack,
+    LiveRetryProbeProvider,
     MockProvider,
     PersonaSpec,
     collect_persona_interrogative,
     parse_interrogative_payload,
+    persona_fact_sheet_text,
     run_llm_intake,
 )
+from icp_middleware.quality import assert_record_quality
 
 
 def _asymmetric_pack() -> EventPack:
@@ -73,6 +76,13 @@ def test_mock_provider_produces_accepted_records() -> None:
     assert all(r["validation"]["status"] == "accepted" for r in records)
     assert all(r["collection_config"]["respondent_type"] == "ai_persona" for r in records)
     assert all(r["fact_refs"] for r in records)
+    # Model-emitted subset — not silent full-pack fill
+    for rec, persona in zip(records, pack.personas):
+        refs = set(rec["fact_refs"])
+        assert refs.issubset(set(persona.fact_ids))
+        assert refs  # non-empty under asymmetric
+        assert refs != set(persona.fact_ids) or len(persona.fact_ids) == 1
+        assert_record_quality(rec, persona_fact_sheet_text(pack, persona))
     assert packet is not None
     assert key is not None
     assert len(packet.units) == 3
@@ -98,17 +108,20 @@ def test_retry_polluted_then_clean() -> None:
             ),
         ),
     )
+    clean = "What caused the payments-api restart loop at 14:02 UTC?"
     provider = MockProvider(
         polluted_then_clean=True,
-        default_interrogative="What service failed first during the outage?",
+        default_interrogative=clean,
     )
     record = collect_persona_interrogative(provider, pack, pack.personas[0])
     assert record is not None
     assert record["validation"]["status"] == "accepted"
-    assert record["interrogative_raw"] == (
-        "What service failed first during the outage?"
-    )
+    assert record["interrogative_raw"] == clean
+    assert record["fact_refs"] == ["F-001"]
     assert provider._attempt == 2
+    assert_record_quality(
+        record, persona_fact_sheet_text(pack, pack.personas[0])
+    )
 
 
 def test_blind_export_strips_respondent_identity() -> None:
@@ -142,10 +155,112 @@ def test_blind_export_strips_respondent_identity() -> None:
 
 
 def test_parse_fenced_json() -> None:
-    raw = '```json\n{"interrogative": "What failed first during the outage?"}\n```'
-    text, err = parse_interrogative_payload(raw)
+    raw = (
+        '```json\n{"interrogative": "What caused the payments-api restart '
+        'loop?", "fact_refs": ["F-001"]}\n```'
+    )
+    text, refs, err = parse_interrogative_payload(raw)
     assert err is None
-    assert text == "What failed first during the outage?"
+    assert text == "What caused the payments-api restart loop?"
+    assert refs == ["F-001"]
+
+
+def test_parse_extracts_fact_refs_and_rejects_bad_pattern() -> None:
+    ok, refs, err = parse_interrogative_payload(
+        '{"interrogative": "What failed on payments-api?", "fact_refs": ["F-002"]}'
+    )
+    assert err is None and ok is not None and refs == ["F-002"]
+
+    bad_q, bad_refs, bad_err = parse_interrogative_payload(
+        '{"interrogative": "What failed?", "fact_refs": ["FACT1"]}'
+    )
+    assert bad_err == "PARSE_FAIL"
+    assert bad_q is None and bad_refs is None
+
+
+def test_disallowed_fact_refs_rejected_then_retry() -> None:
+    pack = EventPack(
+        event_id="evt-refs",
+        event_type="technical_incident",
+        information_access="asymmetric_role_packs",
+        personas=(
+            PersonaSpec(
+                persona_id="sre",
+                knowledge_condition_id="K-01",
+                fact_ids=("F-001", "F-002"),
+                fact_sheet_lines=(
+                    "payments-api restart loop at 14:02 UTC.",
+                    "First page at 14:04 UTC.",
+                ),
+                role_label_steward_only="SRE",
+            ),
+        ),
+    )
+    provider = MockProvider(
+        scripted={
+            1: json.dumps(
+                {
+                    "interrogative": (
+                        "What caused the payments-api restart loop?"
+                    ),
+                    "fact_refs": ["F-999"],
+                }
+            ),
+            2: json.dumps(
+                {
+                    "interrogative": (
+                        "What caused the payments-api restart loop?"
+                    ),
+                    "fact_refs": ["F-001"],
+                }
+            ),
+        }
+    )
+    record = collect_persona_interrogative(provider, pack, pack.personas[0])
+    assert record is not None
+    assert record["fact_refs"] == ["F-001"]
+    assert record["validation"]["status"] == "accepted"
+
+
+def test_mock_returns_subset_fact_refs() -> None:
+    pack = _asymmetric_pack()
+    persona = pack.personas[0]  # F-001, F-002
+    provider = MockProvider()
+    record = collect_persona_interrogative(provider, pack, persona)
+    assert record is not None
+    assert record["fact_refs"] == ["F-001"]  # first-id subset, not full pack
+
+
+def test_live_retry_probe_polluted_then_inner() -> None:
+    pack = EventPack(
+        event_id="evt-probe",
+        event_type="technical_incident",
+        information_access="asymmetric_role_packs",
+        personas=(
+            PersonaSpec(
+                persona_id="sre",
+                knowledge_condition_id="K-01",
+                fact_ids=("F-001",),
+                fact_sheet_lines=("payments-api restart loop at 14:02 UTC.",),
+                role_label_steward_only="SRE",
+            ),
+        ),
+    )
+    inner = MockProvider(
+        default_interrogative=(
+            "What caused the payments-api restart loop at 14:02 UTC?"
+        ),
+    )
+    probe = LiveRetryProbeProvider(inner=inner)
+    record = collect_persona_interrogative(probe, pack, pack.personas[0])
+    assert record is not None
+    assert record["validation"]["status"] == "accepted"
+    assert probe.probe_calls == 1
+    assert probe.network_calls == 1
+    assert probe._attempt == 2
+    summary = probe.summary()
+    assert summary["probe_calls"] == 1
+    assert summary["network_calls"] == 1
 
 
 def test_parse_fail_retries_then_none() -> None:

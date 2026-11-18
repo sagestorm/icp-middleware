@@ -33,15 +33,23 @@ user message. Rules:
 - No leading presuppositions or preferred answers (E_LEAD).
 - No meta questions about the survey, prompt, AI, or process (E_META).
 - Length after trim: 12–280 Unicode scalars.
-- Cite only facts listed in your pack; do not invent external knowledge.
+- Seek concrete, fact-grounded information (E_SPEC). Do NOT ask generic
+  questions like "What event is being described?" or "What happened?".
+- Cite only facts listed in your pack via fact_refs; do not invent external
+  knowledge. fact_refs MUST be a non-empty subset of your allowed F-### ids
+  when information_access is asymmetric_role_packs.
 
 Respond with JSON only — no prose, no markdown fences:
-{"interrogative": "<your single question ending with ?>"}
+{"interrogative": "<your single question ending with ?>", "fact_refs": ["F-001"]}
 """
 
-_RETRY_TAIL = "emit one clean interrogative as JSON"
+_RETRY_TAIL = "emit one clean interrogative as JSON with fact_refs"
 _FENCE_RE = re.compile(r"```(?:json)?\s*([\s\S]*?)\s*```", re.IGNORECASE)
 _JSON_OBJ_RE = re.compile(r"\{[\s\S]*\}")
+_FACT_ID_LINE_RE = re.compile(r"^- (F-[0-9]{3})(?::|\s|$)", re.MULTILINE)
+_FACT_LINE_RE = re.compile(r"^- (F-[0-9]{3}):\s*(.+)$", re.MULTILINE)
+_FACT_REF_RE = re.compile(r"^F-[0-9]{3}$")
+_ALLOWED_PACK_MARKER = "Your allowed fact pack"
 
 
 @dataclass(frozen=True)
@@ -89,10 +97,35 @@ _KCID_RE = re.compile(
 )
 
 _DEFAULT_BY_KNOWLEDGE: dict[str, str] = {
-    "K-01": "What service failed first during the outage?",
-    "K-02": "When did customer-facing errors begin climbing?",
-    "K-03": "Which support queue first reported the login failures?",
+    "K-01": "What caused the payments-api restart loop at 14:02 UTC?",
+    "K-02": "When did the Checkout UI error rate rise above 8%?",
+    "K-03": "When did Support first log the login-failure tickets?",
 }
+
+
+def _allowed_pack_section(user: str) -> str:
+    idx = user.find(_ALLOWED_PACK_MARKER)
+    return user[idx:] if idx >= 0 else user
+
+
+def _fact_ids_from_user(user: str) -> list[str]:
+    return _FACT_ID_LINE_RE.findall(_allowed_pack_section(user))
+
+
+def _grounded_interrogative_from_user(user: str) -> str | None:
+    """Build a fact-grounded question from the first allowed pack line."""
+    lines = _FACT_LINE_RE.findall(_allowed_pack_section(user))
+    if not lines:
+        return None
+    _fid, sheet = lines[0]
+    sheet = sheet.strip().rstrip(".")
+    if not sheet:
+        return None
+    return f"What is known about {sheet}?"
+
+
+def _payload_json(interrogative: str, fact_refs: Sequence[str]) -> str:
+    return json.dumps({"interrogative": interrogative, "fact_refs": list(fact_refs)})
 
 
 @dataclass
@@ -104,6 +137,9 @@ class MockProvider:
     ``by_knowledge``, or a built-in map keyed by ``knowledge_condition_id`` in
     the user message. Pass ``polluted_then_clean=True`` to emit an
     E_EMO/E_LEAD question on attempt 1 and a clean question afterward.
+
+    Clean responses include a **subset** of allowed ``fact_refs`` parsed from
+    the user message (first id only) — never the full pack by default.
     """
 
     scripted: Mapping[int, str] = field(default_factory=dict)
@@ -113,6 +149,7 @@ class MockProvider:
     polluted_interrogative: str = (
         "Why didn't you stop this terrible cover-up before publication?"
     )
+    polluted_fact_refs: tuple[str, ...] = ()
     _attempt: int = field(default=0, init=False, repr=False)
 
     def complete(self, system: str, user: str) -> str:
@@ -121,10 +158,14 @@ class MockProvider:
         attempt = self._attempt
         if attempt in self.scripted:
             return self.scripted[attempt]
+        allowed = _fact_ids_from_user(user)
         if self.polluted_then_clean and attempt == 1:
-            return json.dumps({"interrogative": self.polluted_interrogative})
+            refs = list(self.polluted_fact_refs)
+            return _payload_json(self.polluted_interrogative, refs)
         clean = self._clean_for_user(user)
-        return json.dumps({"interrogative": clean})
+        # Subset: first allowed id only (model-emitted, not full pack).
+        refs = allowed[:1]
+        return _payload_json(clean, refs)
 
     def _clean_for_user(self, user: str) -> str:
         if self.default_interrogative is not None:
@@ -134,9 +175,15 @@ class MockProvider:
             kid = match.group(1).upper()
             if kid in self.by_knowledge:
                 return self.by_knowledge[kid]
+        # Prefer pack-line grounding so non-outage events (e.g. policy) pass E_SPEC.
+        grounded = _grounded_interrogative_from_user(user)
+        if grounded is not None:
+            return grounded
+        if match:
+            kid = match.group(1).upper()
             if kid in _DEFAULT_BY_KNOWLEDGE:
                 return _DEFAULT_BY_KNOWLEDGE[kid]
-        return "What service failed first during the outage?"
+        return "What caused the payments-api restart loop at 14:02 UTC?"
 
     def reset(self) -> None:
         self._attempt = 0
@@ -199,6 +246,52 @@ class OpenAICompatibleProvider:
         return content
 
 
+@dataclass
+class LiveRetryProbeProvider:
+    """Prove live retry: attempt 1 is local pollution; attempt 2+ hits ``inner``.
+
+    Call :meth:`reset` between personas (``run_llm_intake`` does this). After a
+    full run, inspect ``persona_attempts``, ``probe_calls``, and
+    ``network_calls`` to confirm the first attempt never touched the network.
+    """
+
+    inner: LLMProvider
+    polluted_interrogative: str = (
+        "Why didn't you stop this terrible cover-up before publication?"
+    )
+    polluted_fact_refs: tuple[str, ...] = ("F-999",)
+    _attempt: int = field(default=0, init=False, repr=False)
+    probe_calls: int = field(default=0, init=False)
+    network_calls: int = field(default=0, init=False)
+    persona_attempts: list[int] = field(default_factory=list, init=False)
+
+    def complete(self, system: str, user: str) -> str:
+        self._attempt += 1
+        if self._attempt == 1:
+            self.probe_calls += 1
+            return _payload_json(
+                self.polluted_interrogative,
+                self.polluted_fact_refs,
+            )
+        self.network_calls += 1
+        return self.inner.complete(system, user)
+
+    def reset(self) -> None:
+        if self._attempt:
+            self.persona_attempts.append(self._attempt)
+        self._attempt = 0
+
+    def summary(self) -> dict[str, Any]:
+        attempts = list(self.persona_attempts)
+        if self._attempt:
+            attempts = attempts + [self._attempt]
+        return {
+            "probe_calls": self.probe_calls,
+            "network_calls": self.network_calls,
+            "persona_attempts": attempts,
+        }
+
+
 def _strip_fences(text: str) -> str:
     match = _FENCE_RE.search(text)
     if match:
@@ -206,10 +299,13 @@ def _strip_fences(text: str) -> str:
     return text.strip()
 
 
-def parse_interrogative_payload(raw: str) -> tuple[str | None, str | None]:
-    """Extract ``interrogative`` from model text.
+def parse_interrogative_payload(
+    raw: str,
+) -> tuple[str | None, list[str] | None, str | None]:
+    """Extract ``interrogative`` and ``fact_refs`` from model text.
 
-    Returns ``(interrogative, None)`` on success or ``(None, "PARSE_FAIL")``.
+    Returns ``(interrogative, fact_refs, None)`` on success or
+    ``(None, None, "PARSE_FAIL")`` on failure.
     """
     cleaned = _strip_fences(raw)
     try:
@@ -217,17 +313,37 @@ def parse_interrogative_payload(raw: str) -> tuple[str | None, str | None]:
     except json.JSONDecodeError:
         obj_match = _JSON_OBJ_RE.search(cleaned)
         if not obj_match:
-            return None, "PARSE_FAIL"
+            return None, None, "PARSE_FAIL"
         try:
             data = json.loads(obj_match.group(0))
         except json.JSONDecodeError:
-            return None, "PARSE_FAIL"
+            return None, None, "PARSE_FAIL"
     if not isinstance(data, dict):
-        return None, "PARSE_FAIL"
+        return None, None, "PARSE_FAIL"
     value = data.get("interrogative")
     if not isinstance(value, str) or not value.strip():
-        return None, "PARSE_FAIL"
-    return value.strip(), None
+        return None, None, "PARSE_FAIL"
+    refs_raw = data.get("fact_refs", [])
+    if refs_raw is None:
+        refs_raw = []
+    if not isinstance(refs_raw, list):
+        return None, None, "PARSE_FAIL"
+    refs: list[str] = []
+    for item in refs_raw:
+        if not isinstance(item, str) or not _FACT_REF_RE.match(item):
+            return None, None, "PARSE_FAIL"
+        refs.append(item)
+    return value.strip(), refs, None
+
+
+def persona_fact_sheet_text(
+    event_pack: EventPack,
+    persona: PersonaSpec,
+) -> str:
+    """Join shared facts + persona fact lines for E_SPEC grounding."""
+    parts = [line for line in event_pack.shared_facts if line]
+    parts.extend(line for line in persona.fact_sheet_lines if line)
+    return "\n".join(parts)
 
 
 def _fact_sheet_user_message(
@@ -254,20 +370,21 @@ def _fact_sheet_user_message(
         for fid in persona.fact_ids[len(persona.fact_sheet_lines) :]:
             lines.append(f"- {fid}")
     lines.append("")
-    lines.append('Return JSON only: {"interrogative": "..."}')
+    lines.append(
+        'Return JSON only: {"interrogative": "...", "fact_refs": ["F-###", ...]}'
+    )
+    lines.append(
+        "fact_refs MUST be a non-empty subset of your allowed ids under "
+        "asymmetric_role_packs. Do not return the full pack unless every id "
+        "is genuinely cited by the interrogative."
+    )
     return "\n".join(lines)
 
 
-def _retry_user_message(codes: Sequence[str]) -> str:
+def _retry_user_message(base_fact_sheet: str, codes: Sequence[str]) -> str:
+    """Re-send the fact pack with codes only (no coaching / paraphrase)."""
     joined = ",".join(codes) if codes else "PARSE_FAIL"
-    return f"{joined}\n{_RETRY_TAIL}"
-
-
-def _resolve_fact_refs(event_pack: EventPack, persona: PersonaSpec) -> list[str]:
-    refs = list(persona.fact_ids)
-    if event_pack.information_access == INFORMATION_ACCESS_ASYMMETRIC and not refs:
-        return []
-    return refs
+    return f"{base_fact_sheet}\n\nValidation failed: {joined}\n{_RETRY_TAIL}"
 
 
 def collect_persona_interrogative(
@@ -279,22 +396,29 @@ def collect_persona_interrogative(
 ) -> dict[str, Any] | None:
     """Ask one persona for a single interrogative; validate with ≤ retries.
 
-    On validation failure the next user message contains only error codes plus
-    a short emit instruction — no coaching or paraphrased rewrites.
+    On validation failure the next user message re-sends the fact pack plus
+    error codes and a short emit instruction — no coaching or paraphrased
+    rewrites. (Codes-only without the pack breaks single-turn providers that
+    cannot recall prior ``fact_refs`` / sheet text.)
+
+    ``fact_refs`` come from the model payload. Under asymmetric access they
+    MUST be non-empty and ⊆ ``persona.fact_ids`` (enforced via ``E_FACT``).
+    The pack is never silently substituted for model refs.
     """
     if max_attempts < 1:
         return None
 
-    user_msg = _fact_sheet_user_message(event_pack, persona)
-    fact_refs = _resolve_fact_refs(event_pack, persona)
+    base_msg = _fact_sheet_user_message(event_pack, persona)
+    user_msg = base_msg
     fact_ids_allowed = list(persona.fact_ids)
+    fact_sheet_text = persona_fact_sheet_text(event_pack, persona)
     config = event_pack.collection_config()
 
     for _attempt in range(1, max_attempts + 1):
         raw = provider.complete(SYSTEM_PROMPT, user_msg)
-        interrogative, parse_err = parse_interrogative_payload(raw)
-        if parse_err is not None or interrogative is None:
-            user_msg = _retry_user_message([parse_err or "PARSE_FAIL"])
+        interrogative, fact_refs, parse_err = parse_interrogative_payload(raw)
+        if parse_err is not None or interrogative is None or fact_refs is None:
+            user_msg = _retry_user_message(base_msg, [parse_err or "PARSE_FAIL"])
             continue
 
         validation = validate_interrogative(
@@ -302,9 +426,10 @@ def collect_persona_interrogative(
             information_access=event_pack.information_access,
             fact_ids_allowed=fact_ids_allowed,
             fact_refs=fact_refs,
+            fact_sheet_text=fact_sheet_text,
         )
         if not validation.passed:
-            user_msg = _retry_user_message(validation.codes)
+            user_msg = _retry_user_message(base_msg, validation.codes)
             continue
 
         bias = quarantine_bias(
@@ -316,6 +441,7 @@ def collect_persona_interrogative(
             information_access=event_pack.information_access,
             fact_ids_allowed=fact_ids_allowed,
             fact_refs=fact_refs,
+            fact_sheet_text=fact_sheet_text,
         )
         return build_record(
             interrogative_raw=interrogative,
@@ -324,12 +450,19 @@ def collect_persona_interrogative(
             knowledge_condition_id=persona.knowledge_condition_id,
             fact_refs=fact_refs,
             fact_ids_allowed=fact_ids_allowed,
+            fact_sheet_text=fact_sheet_text,
             validation=validation,
             bias_quarantine=bias,
             respondent_channel="llm_intake",
         )
 
     return None
+
+
+def _maybe_reset_provider(provider: LLMProvider) -> None:
+    reset = getattr(provider, "reset", None)
+    if callable(reset):
+        reset()
 
 
 def run_llm_intake(
@@ -345,8 +478,7 @@ def run_llm_intake(
     fact_map: dict[str, str] = {}
 
     for persona in event_pack.personas:
-        if isinstance(provider, MockProvider):
-            provider.reset()
+        _maybe_reset_provider(provider)
         record = collect_persona_interrogative(
             provider,
             event_pack,
@@ -421,11 +553,13 @@ __all__ = [
     "SYSTEM_PROMPT",
     "EventPack",
     "LLMProvider",
+    "LiveRetryProbeProvider",
     "MockProvider",
     "OpenAICompatibleProvider",
     "PersonaSpec",
     "collect_persona_interrogative",
     "event_pack_from_dict",
     "parse_interrogative_payload",
+    "persona_fact_sheet_text",
     "run_llm_intake",
 ]

@@ -16,11 +16,14 @@ if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
 from icp_middleware.llm_intake import (  # noqa: E402
+    LiveRetryProbeProvider,
     MockProvider,
     OpenAICompatibleProvider,
     event_pack_from_dict,
+    persona_fact_sheet_text,
     run_llm_intake,
 )
+from icp_middleware.quality import assert_record_quality  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 DEFAULT_EVENT = HERE / "sample_event.json"
@@ -90,10 +93,21 @@ def main(argv: list[str] | None = None) -> int:
         help="Call OpenAI-compatible Chat Completions (needs OPENAI_API_KEY)",
     )
     parser.add_argument(
+        "--probe-retry",
+        action="store_true",
+        help=(
+            "With --live: wrap the provider so attempt 1 is local pollution "
+            "and attempt 2+ hit the network (proves code-only retry)."
+        ),
+    )
+    parser.add_argument(
         "--event",
         type=Path,
         default=DEFAULT_EVENT,
-        help=f"Event pack JSON (default: {DEFAULT_EVENT.name})",
+        help=(
+            "Event pack JSON (default: sample_event.json). "
+            "Also see sample_event_policy.json for policy_change."
+        ),
     )
     parser.add_argument(
         "--out",
@@ -109,6 +123,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    if args.probe_retry and not args.live:
+        raise SystemExit("--probe-retry requires --live")
+
     # Prefer workspace .env (pipi/), then middleware package .env — never override
     # already-exported process variables.
     _load_dotenv(_ROOT.parent / ".env")
@@ -118,14 +135,23 @@ def main(argv: list[str] | None = None) -> int:
     data = json.loads(args.event.read_text(encoding="utf-8"))
     event_pack = event_pack_from_dict(data)
 
+    probe: LiveRetryProbeProvider | None = None
     if use_live:
         api_key, base_url, model = _resolve_live_credentials()
-        provider = OpenAICompatibleProvider(
+        live = OpenAICompatibleProvider(
             api_key=api_key,
             base_url=base_url,
             model=model,
         )
-        print(f"Live provider model={model} base_url={base_url}")
+        if args.probe_retry:
+            probe = LiveRetryProbeProvider(inner=live)
+            provider = probe
+            print(
+                f"LiveRetryProbeProvider → model={model} base_url={base_url}"
+            )
+        else:
+            provider = live
+            print(f"Live provider model={model} base_url={base_url}")
     else:
         provider = MockProvider()
         print("MockProvider (offline)")
@@ -135,6 +161,32 @@ def main(argv: list[str] | None = None) -> int:
         provider,
         max_attempts=args.max_attempts,
     )
+
+    if probe is not None:
+        summary = probe.summary()
+        print(
+            "Probe retry summary: "
+            f"probe_calls={summary['probe_calls']} "
+            f"network_calls={summary['network_calls']} "
+            f"persona_attempts={summary['persona_attempts']}"
+        )
+        _write_json(args.out / "probe_retry_summary.json", summary)
+
+    # Soft quality check on accepted records (does not fail the process alone).
+    persona_by_kcid = {
+        p.knowledge_condition_id: p for p in event_pack.personas
+    }
+    for rec in records:
+        if rec.get("validation", {}).get("status") != "accepted":
+            continue
+        persona = persona_by_kcid.get(rec["knowledge_condition_id"])
+        sheet = (
+            persona_fact_sheet_text(event_pack, persona) if persona else None
+        )
+        try:
+            assert_record_quality(rec, sheet)
+        except AssertionError as exc:
+            print(f"Quality warning ({rec.get('knowledge_condition_id')}): {exc}")
 
     out_dir = args.out
     _write_json(out_dir / "records.json", records)

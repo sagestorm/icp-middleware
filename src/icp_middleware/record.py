@@ -40,6 +40,7 @@ def build_record(
     respondent_token: str | None = None,
     fact_refs: Sequence[str] | None = None,
     fact_ids_allowed: Sequence[str] | None = None,
+    fact_sheet_text: str | None = None,
     freeform_affect: str | None = None,
     respondent_channel: str | None = None,
     review_packet_id: str | None = None,
@@ -60,6 +61,7 @@ def build_record(
             information_access=information_access,
             fact_ids_allowed=fact_ids_allowed,
             fact_refs=refs,
+            fact_sheet_text=fact_sheet_text,
         )
 
     if bias_quarantine is None:

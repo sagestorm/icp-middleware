@@ -1,4 +1,4 @@
-"""Conformance against protocol fixtures 01–08."""
+"""Conformance against protocol fixtures 01–11."""
 
 from __future__ import annotations
 
@@ -40,17 +40,26 @@ def _load_fixture(name: str) -> dict:
         "05-fail-length.json",
         "06-fail-meta.json",
         "07-fail-missing-fact-ref-asymmetric.json",
+        "09-fail-spec-generic.json",
+        "10-fail-spec-ungrounded.json",
+        "11-valid-spec-grounded.json",
     ],
 )
-def test_fixtures_01_to_07_gate_codes(filename: str) -> None:
+def test_fixtures_gate_codes(filename: str) -> None:
+    path = FIXTURES / filename
+    if not path.is_file():
+        pytest.skip(f"fixture {filename} not present")
     fixture = _load_fixture(filename)
     record = fixture["record"]
     expect = fixture["expect"]
     access = record["collection_config"]["information_access"]
+    context = fixture.get("context") or {}
+    fact_sheet_text = context.get("fact_sheet_text")
     result = validate_interrogative(
         record["interrogative_raw"],
         information_access=access,
         fact_refs=record.get("fact_refs") or [],
+        fact_sheet_text=fact_sheet_text,
     )
     expected_codes = list(expect.get("error_codes") or [])
     assert list(result.codes) == expected_codes

@@ -14,6 +14,7 @@ ERROR_CODES = (
     "E_LEN",
     "E_META",
     "E_FACT",
+    "E_SPEC",
 )
 
 ERROR_MESSAGES = {
@@ -34,9 +35,63 @@ ERROR_MESSAGES = {
     ),
     "E_FACT": (
         "fact_refs MUST be non-empty when information_access is "
-        "asymmetric_role_packs."
+        "asymmetric_role_packs; entries MUST match F-### and ⊆ allowed ids."
+    ),
+    "E_SPEC": (
+        "Interrogative must seek concrete, fact-grounded information; "
+        "generic or ungrounded event restatements are forbidden."
     ),
 }
+
+# Content-token stopwords for E_SPEC grounding (SPEC §5.8).
+SPEC_STOPWORDS = frozenset(
+    {
+        "what",
+        "when",
+        "where",
+        "which",
+        "whose",
+        "whom",
+        "this",
+        "that",
+        "with",
+        "from",
+        "have",
+        "been",
+        "were",
+        "will",
+        "would",
+        "could",
+        "should",
+        "about",
+        "event",
+        "incident",
+        "during",
+        "after",
+        "before",
+        "being",
+        "described",
+    }
+)
+
+# Case-insensitive banal / generic templates rejected by E_SPEC.
+BANAL_INTERROGATIVES = frozenset(
+    {
+        "what event is being described?",
+        "what incident is being described?",
+        "what situation is being described?",
+        "what issue is being described?",
+        "what happened?",
+        "what is going on?",
+        "what was going on?",
+        "can you tell me more?",
+        "can you explain more?",
+        "what do you tell me about the event?",
+        "what can you tell me about the event?",
+        "what do you tell me about the incident?",
+        "what can you tell me about the incident?",
+    }
+)
 
 WH_TOKENS = frozenset(
     {

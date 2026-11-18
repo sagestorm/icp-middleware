@@ -7,13 +7,14 @@ from collections.abc import Iterable, Sequence
 
 from icp_middleware.constants import (
     AUX_TOKENS,
-    EMO_LEXICON,
+    BANAL_INTERROGATIVES,
     ERROR_CODES,
     ERROR_MESSAGES,
     INFORMATION_ACCESS_ASYMMETRIC,
     MAX_LEN,
     MIN_LEN,
     PROTOCOL_VERSION_STR,
+    SPEC_STOPWORDS,
     WH_TOKENS,
 )
 from icp_middleware.normalize import normalize_surface, trim_only
@@ -21,6 +22,7 @@ from icp_middleware.types import ValidationResult
 
 _FACT_REF_RE = re.compile(r"^F-[0-9]{3}$")
 _FIRST_ALPHA_RE = re.compile(r"[A-Za-z]+")
+_CONTENT_TOKEN_RE = re.compile(r"[A-Za-z0-9]{4,}", re.UNICODE)
 
 # SPEC §5.1 — coordinating join after ? / mid-string question boundary
 _ATOM_AFTER_Q = re.compile(r"\?\s*(and|or|also)\b", re.IGNORECASE)
@@ -86,6 +88,27 @@ _META_PATTERNS = (
     ),
 )
 
+# SPEC §5.8 E_SPEC — generic / banal templates
+_SPEC_GENERIC_EVENT = re.compile(
+    r"^\s*what\s+(?:event|incident|situation|issue)\s+(?:is|was)\s+"
+    r"(?:being\s+)?(?:described|this)\b",
+    re.IGNORECASE,
+)
+_SPEC_WHAT_HAPPENED = re.compile(r"^\s*what\s+happened(?:\?|\s*$)", re.IGNORECASE)
+_SPEC_GOING_ON = re.compile(
+    r"^\s*what\s+(?:is|was)\s+going\s+on\b",
+    re.IGNORECASE,
+)
+_SPEC_TELL_MORE = re.compile(
+    r"^\s*can\s+you\s+(?:tell|explain)\s+(?:me\s+)?more\b",
+    re.IGNORECASE,
+)
+_SPEC_TELL_ABOUT = re.compile(
+    r"^\s*what\s+(?:do|can)\s+you\s+tell\s+me\s+about\s+(?:the\s+)?"
+    r"(?:event|incident)\b",
+    re.IGNORECASE,
+)
+
 
 def _fails_atom(text: str) -> bool:
     if text.count("?") > 1:
@@ -101,9 +124,19 @@ def _fails_atom(text: str) -> bool:
     return False
 
 
+# Prepositional fronts before a wh-word (e.g. "At what time…", "In which…").
+_WH_PREP_FRONT = re.compile(
+    r"^(?:at|in|on|for|by|to|from)\s+"
+    r"(?:who|what|when|where|why|which|how|whose|whom)\b",
+    re.IGNORECASE,
+)
+
+
 def _fails_wh(surface: str) -> bool:
     if not surface.endswith("?"):
         return True
+    if _WH_PREP_FRONT.match(surface.lstrip()):
+        return False
     match = _FIRST_ALPHA_RE.search(surface)
     if not match:
         return True
@@ -158,17 +191,69 @@ def _fails_fact(
     return False
 
 
+def content_tokens(text: str) -> frozenset[str]:
+    """Extract E_SPEC content tokens (len ≥4, lowercased, stopwords dropped)."""
+    raw = {m.group(0).lower() for m in _CONTENT_TOKEN_RE.finditer(text)}
+    return frozenset(t for t in raw if t not in SPEC_STOPWORDS)
+
+
+def _what_happened_lacks_substance(text: str) -> bool:
+    """True when ``what happened`` has no other content word len ≥5 besides happened."""
+    if not _SPEC_WHAT_HAPPENED.match(text.strip()):
+        return False
+    extras = [
+        t
+        for t in _CONTENT_TOKEN_RE.findall(text.lower())
+        if t != "happened" and len(t) >= 5
+    ]
+    return not extras
+
+
+def matches_banal_template(text: str) -> bool:
+    """Return True when the interrogative matches an E_SPEC generic template."""
+    surface = trim_only(text)
+    lowered = surface.lower()
+    if lowered in BANAL_INTERROGATIVES:
+        return True
+    if _SPEC_GENERIC_EVENT.match(surface):
+        return True
+    if _what_happened_lacks_substance(surface):
+        return True
+    if _SPEC_GOING_ON.match(surface):
+        return True
+    if _SPEC_TELL_MORE.match(surface):
+        return True
+    if _SPEC_TELL_ABOUT.match(surface):
+        return True
+    return False
+
+
+def _fails_spec(text: str, fact_sheet_text: str | None) -> bool:
+    if matches_banal_template(text):
+        return True
+    sheet = (fact_sheet_text or "").strip()
+    if not sheet:
+        return False
+    q_tokens = content_tokens(text)
+    sheet_tokens = content_tokens(sheet)
+    return not (q_tokens & sheet_tokens)
+
+
 def validate_interrogative(
     text: str,
     *,
     information_access: str,
     fact_ids_allowed: Sequence[str] | None = None,
     fact_refs: Iterable[str] | None = None,
+    fact_sheet_text: str | None = None,
 ) -> ValidationResult:
     """Validate an interrogative against ICP SPEC §5 gates.
 
     Returns a :class:`ValidationResult` with ``passed`` / ``codes`` for the
     Python API and protocol fields (``status``, ``errors``, ``gates_passed``).
+
+    When ``fact_sheet_text`` is non-empty, ``E_SPEC`` also requires content-token
+    overlap between the interrogative and the sheet.
     """
     refs = list(fact_refs or ())
     surface = normalize_surface(text)
@@ -183,6 +268,7 @@ def validate_interrogative(
         "E_LEN": _fails_len(text),
         "E_META": _fails_meta(text),
         "E_FACT": _fails_fact(information_access, refs, fact_ids_allowed),
+        "E_SPEC": _fails_spec(text, fact_sheet_text),
     }
     for code in ERROR_CODES:
         if checks[code]:

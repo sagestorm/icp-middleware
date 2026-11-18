@@ -1,0 +1,53 @@
+{
+  "review_packet_id": "pkt-135bea15401c",
+  "protocol_version": "1.0",
+  "profile": "manual_blind_review",
+  "units": [
+    {
+      "unit_id": "U-7B91AEF1",
+      "protocol_version": "1.0",
+      "event_id": "evt-policy-2026-11-17",
+      "interrogative_normalized": "How many signatures were on the petition to delay the effective date until July 2027?",
+      "fact_refs": [
+        "F-121"
+      ],
+      "knowledge_condition_id": "K-03",
+      "collection_config": {
+        "event_type": "policy_change",
+        "downstream": "manual_blind_review"
+      },
+      "submitted_on_utc": "2026-11-18"
+    },
+    {
+      "unit_id": "U-2CC9E84C",
+      "protocol_version": "1.0",
+      "event_id": "evt-policy-2026-11-17",
+      "interrogative_normalized": "How many in-office days per week are required for roles graded L5 and above?",
+      "fact_refs": [
+        "F-101"
+      ],
+      "knowledge_condition_id": "K-01",
+      "collection_config": {
+        "event_type": "policy_change",
+        "downstream": "manual_blind_review"
+      },
+      "submitted_on_utc": "2026-11-18"
+    },
+    {
+      "unit_id": "U-11B9C537",
+      "protocol_version": "1.0",
+      "event_id": "evt-policy-2026-11-17",
+      "interrogative_normalized": "How many people will require desk capacity on peak office days?",
+      "fact_refs": [
+        "F-110"
+      ],
+      "knowledge_condition_id": "K-02",
+      "collection_config": {
+        "event_type": "policy_change",
+        "downstream": "manual_blind_review"
+      },
+      "submitted_on_utc": "2026-11-18"
+    }
+  ],
+  "created_at_utc": "2026-11-18T00:04:58Z"
+}

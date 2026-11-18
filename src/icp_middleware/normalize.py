@@ -47,6 +47,7 @@ def normalize_interrogative(
     information_access: str = INFORMATION_ACCESS_IDENTICAL,
     fact_ids_allowed: Sequence[str] | None = None,
     fact_refs: Sequence[str] | None = None,
+    fact_sheet_text: str | None = None,
 ) -> str | None:
     """Cleaning-only normalize; ``None`` if validation fails."""
     from icp_middleware.validate import validate_interrogative
@@ -56,6 +57,7 @@ def normalize_interrogative(
         information_access=information_access,
         fact_ids_allowed=fact_ids_allowed,
         fact_refs=fact_refs,
+        fact_sheet_text=fact_sheet_text,
     )
     if not result.passed:
         return None

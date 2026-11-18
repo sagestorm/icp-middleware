@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://interrogative-collection-protocol.org/schemas/interrogative.collection.v1.json",
+  "$id": "https://sagestorm.github.io/interrogative-collection-protocol/schemas/interrogative.collection.v1.json",
   "title": "ICP Interrogative Collection Record v1",
   "description": "Normative record shape for Interrogative Collection Protocol v1.",
   "type": "object",
@@ -163,7 +163,8 @@
                   "E_LEAD",
                   "E_LEN",
                   "E_META",
-                  "E_FACT"
+                  "E_FACT",
+                  "E_SPEC"
                 ]
               },
               "message": {
@@ -184,7 +185,8 @@
               "E_LEAD",
               "E_LEN",
               "E_META",
-              "E_FACT"
+              "E_FACT",
+              "E_SPEC"
             ]
           },
           "uniqueItems": true

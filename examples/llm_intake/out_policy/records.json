@@ -1,0 +1,124 @@
+[
+  {
+    "record_id": "f1aff8e0-fc6a-4afb-8434-f3fd912d144c",
+    "event_id": "evt-policy-2026-11-17",
+    "protocol_version": "1.0",
+    "collection_config": {
+      "respondent_type": "ai_persona",
+      "event_type": "policy_change",
+      "information_access": "asymmetric_role_packs",
+      "downstream": "manual_blind_review"
+    },
+    "knowledge_condition_id": "K-01",
+    "respondent_token": "R-TZ3DWIJBHBGN",
+    "interrogative_raw": "How many in-office days per week are required for roles graded L5 and above?",
+    "bias_quarantine": {
+      "flags": [
+        "compound"
+      ],
+      "spans": [
+        {
+          "start": 66,
+          "end": 69,
+          "reason": "coordinating join of two interrogative clauses"
+        }
+      ]
+    },
+    "interrogative_normalized": "How many in-office days per week are required for roles graded L5 and above?",
+    "validation": {
+      "status": "accepted",
+      "errors": [],
+      "gates_passed": [
+        "E_ATOM",
+        "E_WH",
+        "E_EMO",
+        "E_LEAD",
+        "E_LEN",
+        "E_META",
+        "E_FACT",
+        "E_SPEC"
+      ]
+    },
+    "fact_refs": [
+      "F-101"
+    ],
+    "submitted_at_utc": "2026-11-18T00:04:54Z",
+    "respondent_channel": "llm_intake"
+  },
+  {
+    "record_id": "1d6db97f-4e17-4229-88bb-678497de1742",
+    "event_id": "evt-policy-2026-11-17",
+    "protocol_version": "1.0",
+    "collection_config": {
+      "respondent_type": "ai_persona",
+      "event_type": "policy_change",
+      "information_access": "asymmetric_role_packs",
+      "downstream": "manual_blind_review"
+    },
+    "knowledge_condition_id": "K-02",
+    "respondent_token": "R-96DHZSR1I8DF",
+    "interrogative_raw": "How many people will require desk capacity on peak office days?",
+    "bias_quarantine": {
+      "flags": [],
+      "spans": []
+    },
+    "interrogative_normalized": "How many people will require desk capacity on peak office days?",
+    "validation": {
+      "status": "accepted",
+      "errors": [],
+      "gates_passed": [
+        "E_ATOM",
+        "E_WH",
+        "E_EMO",
+        "E_LEAD",
+        "E_LEN",
+        "E_META",
+        "E_FACT",
+        "E_SPEC"
+      ]
+    },
+    "fact_refs": [
+      "F-110"
+    ],
+    "submitted_at_utc": "2026-11-18T00:04:56Z",
+    "respondent_channel": "llm_intake"
+  },
+  {
+    "record_id": "4c78bf41-99e7-4d95-bed1-71f6144ef862",
+    "event_id": "evt-policy-2026-11-17",
+    "protocol_version": "1.0",
+    "collection_config": {
+      "respondent_type": "ai_persona",
+      "event_type": "policy_change",
+      "information_access": "asymmetric_role_packs",
+      "downstream": "manual_blind_review"
+    },
+    "knowledge_condition_id": "K-03",
+    "respondent_token": "R-AV6D7TDXY7S7",
+    "interrogative_raw": "How many signatures were on the petition to delay the effective date until July 2027?",
+    "bias_quarantine": {
+      "flags": [],
+      "spans": []
+    },
+    "interrogative_normalized": "How many signatures were on the petition to delay the effective date until July 2027?",
+    "validation": {
+      "status": "accepted",
+      "errors": [],
+      "gates_passed": [
+        "E_ATOM",
+        "E_WH",
+        "E_EMO",
+        "E_LEAD",
+        "E_LEN",
+        "E_META",
+        "E_FACT",
+        "E_SPEC"
+      ]
+    },
+    "fact_refs": [
+      "F-121"
+    ],
+    "submitted_at_utc": "2026-11-18T00:04:58Z",
+    "respondent_channel": "llm_intake"
+  }
+]

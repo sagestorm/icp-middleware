@@ -1,0 +1,43 @@
+{
+  "event_id": "evt-policy-2026-11-17",
+  "event_type": "policy_change",
+  "respondent_type": "ai_persona",
+  "information_access": "asymmetric_role_packs",
+  "downstream": "manual_blind_review",
+  "shared_facts": [
+    "F-100: On 2026-11-17 the company announced a revised remote-work attendance policy effective 2027-01-01."
+  ],
+  "personas": [
+    {
+      "persona_id": "hr-policy",
+      "knowledge_condition_id": "K-01",
+      "role_label_steward_only": "HR policy lead (asymmetric pack)",
+      "fact_ids": ["F-101", "F-102", "F-103"],
+      "fact_sheet_lines": [
+        "Draft policy requires three in-office days per week for roles graded L5 and above.",
+        "Legal reviewed the attendance clause on 2026-11-10 and flagged ADA accommodation language.",
+        "The prior 2024 hybrid guideline allowed manager discretion with no minimum office days."
+      ]
+    },
+    {
+      "persona_id": "engineering-manager",
+      "knowledge_condition_id": "K-02",
+      "role_label_steward_only": "Engineering manager (asymmetric pack)",
+      "fact_ids": ["F-110", "F-111"],
+      "fact_sheet_lines": [
+        "Engineering headcount across three time zones would need desk capacity for ~180 people on peak office days.",
+        "On-call rotations currently assume engineers may work fully remote during overnight incident windows."
+      ]
+    },
+    {
+      "persona_id": "employee-rep",
+      "knowledge_condition_id": "K-03",
+      "role_label_steward_only": "Employee representative (asymmetric pack)",
+      "fact_ids": ["F-120", "F-121"],
+      "fact_sheet_lines": [
+        "Employee forum tickets cited commuting cost and childcare conflicts for two in-office days already practiced informally.",
+        "A petition with 412 signatures asked leadership to delay the effective date until July 2027."
+      ]
+    }
+  ]
+}
